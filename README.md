@@ -1,1 +1,0 @@
-# Painel-Monitoramento-Inteligente

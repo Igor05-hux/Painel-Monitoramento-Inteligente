@@ -1,0 +1,757 @@
+import React, { useMemo, useState } from 'react'
+
+const usuariosIniciais = [
+  { id: 1, nome: 'Administrador Master', email: 'admin@empresa.com', perfil: 'Administrador', status: 'Ativo', ultimoAcesso: '12/03/2026 14:32' },
+  { id: 2, nome: 'João Operador', email: 'joao@empresa.com', perfil: 'Operador', status: 'Ativo', ultimoAcesso: '12/03/2026 14:20' },
+  { id: 3, nome: 'Maria Auditoria', email: 'maria@empresa.com', perfil: 'Auditor', status: 'Ativo', ultimoAcesso: '12/03/2026 13:58' },
+  { id: 4, nome: 'Carlos Visitante', email: 'carlos@empresa.com', perfil: 'Visualizador', status: 'Inativo', ultimoAcesso: '11/03/2026 18:11' },
+]
+
+const dispositivosIniciais = [
+  { id: 1, nome: 'Câmera Externa 01', tipo: 'Câmera', local: 'Entrada Principal', status: 'Online', ip: '192.168.0.21' },
+  { id: 2, nome: 'Sensor Porta 03', tipo: 'Sensor', local: 'Bloco Administrativo', status: 'Alerta', ip: '192.168.0.34' },
+  { id: 3, nome: 'Câmera Pátio 02', tipo: 'Câmera', local: 'Estacionamento', status: 'Online', ip: '192.168.0.25' },
+  { id: 4, nome: 'Sensor Janela 01', tipo: 'Sensor', local: 'Almoxarifado', status: 'Offline', ip: '192.168.0.47' },
+]
+
+const eventosIniciais = [
+  { id: 1, tipo: 'Login', origem: 'admin@empresa.com', local: 'Central', horario: '12/03/2026 14:02', status: 'Sucesso', descricao: 'Login realizado com autenticação válida.' },
+  { id: 2, tipo: 'Alerta', origem: 'sensor-porta-03', local: 'Entrada Principal', horario: '12/03/2026 14:07', status: 'Atenção', descricao: 'Abertura de porta fora da janela prevista.' },
+  { id: 3, tipo: 'Câmera', origem: 'cam-externa-02', local: 'Estacionamento', horario: '12/03/2026 14:11', status: 'Online', descricao: 'Dispositivo transmitindo normalmente.' },
+  { id: 4, tipo: 'Acesso', origem: 'joao@empresa.com', local: 'Sala TI', horario: '12/03/2026 14:16', status: 'Autorizado', descricao: 'Acesso liberado por perfil de operador.' },
+  { id: 5, tipo: 'Alerta', origem: 'sensor-janela-01', local: 'Almoxarifado', horario: '12/03/2026 14:18', status: 'Crítico', descricao: 'Violação detectada em área restrita.' },
+  { id: 6, tipo: 'Auditoria', origem: 'maria@empresa.com', local: 'Módulo de logs', horario: '12/03/2026 14:27', status: 'Sucesso', descricao: 'Consulta ao histórico de eventos concluída.' },
+]
+
+const alertasIniciais = [
+  { id: 1, titulo: 'Violação em área restrita', local: 'Almoxarifado', criticidade: 'Alta', responsavel: 'Equipe de Segurança', status: 'Aberto' },
+  { id: 2, titulo: 'Porta aberta fora do horário', local: 'Entrada Principal', criticidade: 'Média', responsavel: 'Operação', status: 'Em análise' },
+  { id: 3, titulo: 'Dispositivo offline', local: 'Bloco Administrativo', criticidade: 'Baixa', responsavel: 'TI', status: 'Resolvido' },
+]
+
+function Badge({ children, tone = 'neutral' }) {
+  const tones = {
+    green: 'bg-green-100 text-green-700 border-green-200',
+    yellow: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+    red: 'bg-red-100 text-red-700 border-red-200',
+    blue: 'bg-blue-100 text-blue-700 border-blue-200',
+    gray: 'bg-slate-100 text-slate-700 border-slate-200',
+    purple: 'bg-purple-100 text-purple-700 border-purple-200',
+    neutral: 'bg-slate-100 text-slate-700 border-slate-200',
+  }
+
+  return 
+    <span className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-medium ${tones[tone]}`}>
+      {children}
+    </span>
+
+
+function getStatusTone(status) {
+  const value = String(status).toLowerCase()
+  if (['online', 'ativo', 'autorizado', 'sucesso', 'resolvido'].includes(value)) return 'green'
+  if (['atenção', 'alerta', 'em análise', 'media', 'média'].includes(value)) return 'yellow'
+  if (['crítico', 'alta', 'offline', 'aberto'].includes(value)) return 'red'
+  if (['administrador', 'auditor'].includes(value)) return 'purple'
+  if (['operador'].includes(value)) return 'blue'
+  return 'gray'
+}
+
+function Card({ title, value, subtitle }) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-sm text-slate-500">{title}</p>
+      <h3 className="mt-2 text-3xl font-bold text-slate-900">{value}</h3>
+      <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+    </div>
+  )
+}
+
+function Section({ title, description, right, children }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">{title}</h2>
+          {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+        </div>
+        {right}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function Tabela({ columns, data, emptyText = 'Nenhum registro encontrado.' }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="border-b border-slate-200 text-left text-slate-500">
+            {columns.map((col) => (
+              <th key={col.key} className="py-3 pr-4 font-medium">{col.label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {data.length === 0 ? (
+            <tr>
+              <td colSpan={columns.length} className="py-6 text-center text-slate-500">{emptyText}</td>
+            </tr>
+          ) : 
+            data.map(item, index) => 
+              <tr key={item.id ?? index} className="border-b border-slate-100 last:border-b-0">
+                {columns.map((col) => (
+                  <td key={col.key} className="py-3 pr-4 align-top">
+                    {col.render ? col.render(item[col.key], item) : item[col.key]}
+                  </td>
+                ))}
+              </tr>
+            )
+          }
+        </tbody>
+      </table>
+    </div>
+ 
+
+export default function PainelMonitoramentoInteligente() {
+  const [logado, setLogado] = useState(false)
+  const [pagina, setPagina] = useState('dashboard')
+  const [buscaEventos, setBuscaEventos] = useState('')
+  const [usuarios, setUsuarios] = useState(usuariosIniciais)
+  const [dispositivos, setDispositivos] = useState(dispositivosIniciais)
+  const [eventos, setEventos] = useState(eventosIniciais)
+  const [alertas, setAlertas] = useState(alertasIniciais)
+
+  const [novoUsuario, setNovoUsuario] = useState({ nome: '', email: '', perfil: 'Operador' })
+  const [novoDispositivo, setNovoDispositivo] = useState({ nome: '', tipo: 'Câmera', local: '', ip: '' })
+  const [novoAlerta, setNovoAlerta] = useState({ titulo: '', local: '', criticidade: 'Média', responsavel: '' })
+
+  const eventosFiltrados = useMemo(() => {
+    const termo = buscaEventos.toLowerCase().trim()
+    if (!termo) return eventos
+    return eventos.filter((evento) =>
+      [evento.tipo, evento.origem, evento.local, evento.status, evento.descricao]
+        .join(' ')
+        .toLowerCase()
+        .includes(termo)
+    )
+  }, [eventos, buscaEventos])
+
+  const indicadores = useMemo(() => {
+    const alertasAbertos = alertas.filter((a) => a.status !== 'Resolvido').length
+    const dispositivosOnline = dispositivos.filter((d) => d.status === 'Online').length
+    const usuariosAtivos = usuarios.filter((u) => u.status === 'Ativo').length
+    const eventosHoje = eventos.length
+
+    return { alertasAbertos, dispositivosOnline, usuariosAtivos, eventosHoje }
+  }, [alertas, dispositivos, usuarios, eventos])
+
+  function registrarEvento(tipo, origem, local, status, descricao) {
+    const data = new Date()
+    const horario = data.toLocaleString('pt-BR')
+    const novo = {
+      id: Date.now(),
+      tipo,
+      origem,
+      local,
+      horario,
+      status,
+      descricao,
+    }
+    setEventos((prev) => [novo, ...prev])
+  }
+
+  function handleLogin(e) {
+    e.preventDefault()
+    setLogado(true)
+    registrarEvento('Login', 'admin@empresa.com', 'Central', 'Sucesso', 'Sessão iniciada no painel de monitoramento.')
+  }
+
+  function handleLogout() {
+    registrarEvento('Logout', 'admin@empresa.com', 'Central', 'Sucesso', 'Sessão encerrada com segurança.')
+    setLogado(false)
+    setPagina('dashboard')
+  }
+
+  function adicionarUsuario(e) {
+    e.preventDefault()
+    if (!novoUsuario.nome || !novoUsuario.email) return
+
+    const usuario = {
+      id: Date.now(),
+      nome: novoUsuario.nome,
+      email: novoUsuario.email,
+      perfil: novoUsuario.perfil,
+      status: 'Ativo',
+      ultimoAcesso: 'Ainda não acessou',
+    }
+
+    setUsuarios((prev) => [usuario, ...prev])
+    registrarEvento('Usuário', usuario.email, 'Gestão de usuários', 'Sucesso', `Usuário ${usuario.nome} cadastrado com perfil ${usuario.perfil}.`)
+    setNovoUsuario({ nome: '', email: '', perfil: 'Operador' })
+  }
+
+  function adicionarDispositivo(e) {
+    e.preventDefault()
+    if (!novoDispositivo.nome || !novoDispositivo.local || !novoDispositivo.ip) return
+
+    const dispositivo = {
+      id: Date.now(),
+      nome: novoDispositivo.nome,
+      tipo: novoDispositivo.tipo,
+      local: novoDispositivo.local,
+      status: 'Online',
+      ip: novoDispositivo.ip,
+    }
+
+    setDispositivos((prev) => [dispositivo, ...prev])
+    registrarEvento('Dispositivo', dispositivo.nome, dispositivo.local, 'Online', `Novo dispositivo ${dispositivo.tipo.toLowerCase()} cadastrado no sistema.`)
+    setNovoDispositivo({ nome: '', tipo: 'Câmera', local: '', ip: '' })
+  }
+
+  function adicionarAlerta(e) {
+    e.preventDefault()
+    if (!novoAlerta.titulo || !novoAlerta.local || !novoAlerta.responsavel) return
+
+    const alerta = {
+      id: Date.now(),
+      titulo: novoAlerta.titulo,
+      local: novoAlerta.local,
+      criticidade: novoAlerta.criticidade,
+      responsavel: novoAlerta.responsavel,
+      status: 'Aberto',
+    }
+
+    setAlertas((prev) => [alerta, ...prev])
+    registrarEvento('Alerta', novoAlerta.responsavel, novoAlerta.local, novoAlerta.criticidade === 'Alta' ? 'Crítico' : 'Atenção', `Alerta criado manualmente: ${novoAlerta.titulo}.`)
+    setNovoAlerta({ titulo: '', local: '', criticidade: 'Média', responsavel: '' })
+  }
+
+  function alternarStatusUsuario(id) {
+    setUsuarios((prev) =>
+      prev.map((usuario) => {
+        if (usuario.id !== id) return usuario
+        const novoStatus = usuario.status === 'Ativo' ? 'Inativo' : 'Ativo'
+        registrarEvento('Usuário', usuario.email, 'Gestão de usuários', 'Sucesso', `Status do usuário ${usuario.nome} alterado para ${novoStatus}.`)
+        return { ...usuario, status: novoStatus }
+      })
+    )
+  }
+
+  function alternarStatusDispositivo(id) {
+    setDispositivos((prev) =>
+      prev.map((dispositivo) => {
+        if (dispositivo.id !== id) return dispositivo
+        const novoStatus = dispositivo.status === 'Online' ? 'Offline' : 'Online'
+        registrarEvento('Dispositivo', dispositivo.nome, dispositivo.local, novoStatus, `Status do dispositivo alterado para ${novoStatus}.`)
+        return { ...dispositivo, status: novoStatus }
+      })
+    )
+  }
+
+  function concluirAlerta(id) {
+    setAlertas((prev) =>
+      prev.map((alerta) => {
+        if (alerta.id !== id) return alerta
+        registrarEvento('Alerta', alerta.responsavel, alerta.local, 'Sucesso', `Alerta \"${alerta.titulo}\" marcado como resolvido.`)
+        return { ...alerta, status: 'Resolvido' }
+      })
+    )
+  }
+
+  const menu = [
+    { id: 'dashboard', nome: 'Dashboard' },
+    { id: 'eventos', nome: 'Eventos' },
+    { id: 'alertas', nome: 'Alertas' },
+    { id: 'usuarios', nome: 'Usuários' },
+    { id: 'dispositivos', nome: 'Dispositivos' },
+    { id: 'auditoria', nome: 'Auditoria' },
+  ]
+
+  if (!logado) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
+        <div className="grid w-full max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="rounded-3xl bg-slate-900 p-8 text-white shadow-xl">
+            <p className="text-sm uppercase tracking-[0.3em] text-slate-300">Sistema Seguro</p>
+            <h1 className="mt-4 text-4xl font-bold leading-tight">Painel de Monitoramento Inteligente</h1>
+            <p className="mt-4 text-slate-300">
+              Plataforma completa para monitoramento interno, auditoria, controle de acesso, alertas e gestão de dispositivos.
+            </p>
+            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl bg-white/10 p-4">
+                <h3 className="font-semibold">Controle de acesso</h3>
+                <p className="mt-2 text-sm text-slate-300">Perfis, permissões e trilha de auditoria.</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4">
+                <h3 className="font-semibold">Eventos em tempo real</h3>
+                <p className="mt-2 text-sm text-slate-300">Visualização rápida do que acontece no ambiente monitorado.</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4">
+                <h3 className="font-semibold">Dispositivos e sensores</h3>
+                <p className="mt-2 text-sm text-slate-300">Câmeras, sensores e unidades integradas.</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 p-4">
+                <h3 className="font-semibold">Conformidade</h3>
+                <p className="mt-2 text-sm text-slate-300">Base adequada para uso corporativo e rastreabilidade.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
+            <h2 className="text-2xl font-bold text-slate-900">Acesso ao sistema</h2>
+            <p className="mt-2 text-sm text-slate-500">Protótipo funcional para apresentação, estudo e evolução do projeto.</p>
+
+            <form onSubmit={handleLogin} className="mt-8 space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">E-mail</label>
+                <input
+                  defaultValue="admin@empresa.com"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-slate-400"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Senha</label>
+                <input
+                  type="password"
+                  defaultValue="123456"
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-slate-400"
+                />
+              </div>
+              <button className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-medium text-white transition hover:opacity-95">
+                Entrar no painel
+              </button>
+            </form>
+
+            <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+              <p><strong>Usuário de demonstração:</strong> admin@empresa.com</p>
+              <p><strong>Senha de demonstração:</strong> 123456</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-100 text-slate-900">
+      <div className="flex min-h-screen flex-col lg:flex-row">
+        <aside className="w-full border-b border-slate-200 bg-slate-900 p-5 text-white lg:min-h-screen lg:w-72 lg:border-b-0 lg:border-r">
+          <div>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Painel</p>
+            <h1 className="mt-2 text-2xl font-bold">Monitoramento Inteligente</h1>
+            <p className="mt-2 text-sm text-slate-400">Sistema completo para operação, controle e auditoria.</p>
+          </div>
+
+          <nav className="mt-8 space-y-2">
+            {menu.map(item) => 
+              <button
+                key={item.id}
+                onClick={() = > setPagina(item.id)}
+                className={`w-full rounded-2xl px-4 py-3 text-left transition ${
+                  pagina === item.id ? 'bg-white text-slate-900' : 'bg-white/5 text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                {item.nome}
+              </button>
+            )}
+          </nav>
+
+          <div className="mt-8 rounded-2xl bg-white/10 p-4">
+            <p className="text-sm font-medium">Administrador logado</p>
+            <p className="mt-1 text-sm text-slate-300">admin@empresa.com</p>
+            <button
+              onClick={handleLogout}
+              className="mt-4 w-full rounded-2xl bg-white px-4 py-2 text-sm font-medium text-slate-900"
+            >
+              Sair
+            </button>
+          </div>
+        </aside>
+
+        <main className="flex-1 p-6">
+          <div className="mx-auto max-w-7xl space-y-6">
+            <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className="text-3xl font-bold capitalize">{pagina}</h2>
+                <p className="mt-1 text-slate-500">Ambiente funcional para visualização, cadastro e auditoria.</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
+                Última atualização: {new Date().toLocaleString('pt-BR')}
+              </div>
+            </header>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <Card title="Eventos registrados" value={indicadores.eventosHoje} subtitle="Atividades consolidadas no sistema" />
+              <Card title="Alertas abertos" value={indicadores.alertasAbertos} subtitle="Ocorrências que exigem atenção" />
+              <Card title="Dispositivos online" value={indicadores.dispositivosOnline} subtitle="Unidades ativas e monitoradas" />
+              <Card title="Usuários ativos" value={indicadores.usuariosAtivos} subtitle="Perfis habilitados para operação" />
+            </div>
+
+            {pagina === 'dashboard' && 
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <div className="xl:col-span-2 space-y-6">
+                  <Section
+                    title="Resumo operacional"
+                    description="Visão geral do cenário atual do ambiente monitorado."
+                  >
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <h3 className="font-semibold">Controle de acesso</h3>
+                        <p className="mt-2 text-sm text-slate-600">Perfis de administrador, operador, auditor e visualizador.</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <h3 className="font-semibold">Monitoramento contínuo</h3>
+                        <p className="mt-2 text-sm text-slate-600">Eventos e alertas com atualização automática no painel.</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <h3 className="font-semibold">Gestão de ativos</h3>
+                        <p className="mt-2 text-sm text-slate-600">Cadastro de câmeras, sensores e pontos monitorados.</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <h3 className="font-semibold">Auditoria e conformidade</h3>
+                        <p className="mt-2 text-sm text-slate-600">Histórico para rastreabilidade e governança interna.</p>
+                      </div>
+                    </div>
+                  </Section>
+
+                  <Section title="Eventos recentes" description="Últimas movimentações registradas no ambiente.">
+                    <Tabela
+                      columns={[
+                        { key: 'tipo', label: 'Tipo' },
+                        { key: 'origem', label: 'Origem' },
+                        { key: 'local', label: 'Local' },
+                        { key: 'horario', label: 'Horário' },
+                        { key: 'status', label: 'Status', render: (value) => <Badge tone={getStatusTone(value)}>{value}</Badge> },
+                      ]}
+                      data={eventos.slice(0, 6)}
+                    />
+                  </Section>
+                </div>
+
+                <div className="space-y-6">
+                  <Section title="Alertas prioritários" description="Itens que precisam de acompanhamento imediato.">
+                    <div className="space-y-3">
+                      {alertas.slice(0, 4).map((alerta) => (
+                        <div key={alerta.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <h3 className="font-semibold text-slate-900">{alerta.titulo}</h3>
+                              <p className="mt-1 text-sm text-slate-500">{alerta.local}</p>
+                            </div>
+                            <Badge tone={getStatusTone(alerta.criticidade)}>{alerta.criticidade}</Badge>
+                          </div>
+                          <p className="mt-3 text-sm text-slate-600">Responsável: {alerta.responsavel}</p>
+                          <div className="mt-3"><Badge tone={getStatusTone(alerta.status)}>{alerta.status}</Badge></div>
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+
+                  <Section title="Dispositivos monitorados" description="Resumo rápido dos ativos cadastrados.">
+                    <div className="space-y-3">
+                      {dispositivos.slice(0, 4).map((dispositivo) => (
+                        <div key={dispositivo.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-semibold">{dispositivo.nome}</p>
+                              <p className="text-sm text-slate-500">{dispositivo.local}</p>
+                            </div>
+                            <Badge tone={getStatusTone(dispositivo.status)}>{dispositivo.status}</Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+                </div>
+              </div>
+            
+
+            {pagina === 'eventos' && 
+              <Section
+                title="Central de eventos"
+                description="Busque e acompanhe tudo que aconteceu no sistema."
+                right={
+                  <input
+                    value={buscaEventos}
+                    onChange={(e) => setBuscaEventos(e.target.value)}
+                    placeholder="Buscar por tipo, origem, local ou descrição"
+                    className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none md:w-96"
+                  />
+                
+              >
+                <Tabela
+                  columns={[
+                    { key: 'tipo', label: 'Tipo' },
+                    { key: 'origem', label: 'Origem' },
+                    { key: 'local', label: 'Local' },
+                    { key: 'horario', label: 'Horário' },
+                    { key: 'status', label: 'Status', render: (value) => <Badge tone={getStatusTone(value)}>{value}</Badge> },
+                    { key: 'descricao', label: 'Descrição' },
+                  ]
+                  data={eventosFiltrados}
+                />
+              </Section>
+        
+
+            {pagina === 'alertas' && (
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <div className="xl:col-span-2">
+                  <Section title="Gestão de alertas" description="Acompanhe, classifique e finalize alertas do ambiente.">
+                    <Tabela
+                      columns={[
+                        { key: 'titulo', label: "Título" },
+                        { key: 'local', label: 'Local' },
+                        { key: 'criticidade', label: 'Criticidade', render: (value) => <Badge tone={getStatusTone(value)}>{value}</Badge> },
+                        { key: 'responsavel', label: 'Responsável' },
+                        { key: 'status', label: 'Status', render: (value) => <Badge tone={getStatusTone(value)}>{value}</Badge> },
+                        {
+                          key: 'acao',
+                          label: 'Ação',
+                          render: (_, item) => 
+                            <button
+                              onClick={() => concluirAlerta(item.id)}
+                              className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+                              disabled={item.status === 'Resolvido'}
+                            >
+                              Concluir
+                            </button>
+                          ),
+                        },
+                      ]
+                      data={alertas}
+                    />
+                  </Section>
+                </div>
+
+                <Section title="Novo alerta" description="Cadastro manual de ocorrência para demonstração.">
+                  <form onSubmit={adicionarAlerta} className="space-y-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Título</label>
+                      <input
+                        value={novoAlerta.titulo}
+                        onChange={(e) => setNovoAlerta({ ...novoAlerta, titulo: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="Ex.: Movimento suspeito"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Local</label>
+                      <input
+                        value={novoAlerta.local}
+                        onChange={(e) => setNovoAlerta({ ...novoAlerta, local: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="Ex.: Corredor lateral"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Criticidade</label>
+                      <select
+                        value={novoAlerta.criticidade}
+                        onChange={(e) => setNovoAlerta({ ...novoAlerta, criticidade: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                      >
+                        <option>Baixa</option>
+                        <option>Média</option>
+                        <option>Alta</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Responsável</label>
+                      <input
+                        value={novoAlerta.responsavel}
+                        onChange={(e) => setNovoAlerta({ ...novoAlerta, responsavel: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="Ex.: Equipe de Segurança"
+                      />
+                    </div>
+                    <button className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-medium text-white">Salvar alerta</button>
+                  </form>
+                </Section>
+              </div>
+            
+
+            {pagina === 'usuarios' && (
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <div className="xl:col-span-2">
+                  <Section title="Gestão de usuários" description="Controle de acesso e permissões do sistema.">
+                    <Tabela
+                      columns={[
+                        { key: 'nome', label: 'Nome' },
+                        { key: 'email', label: 'E-mail' },
+                        { key: 'perfil', label: 'Perfil', render: (value) => <Badge tone={getStatusTone(value)}>{value}</Badge> },
+                        { key: 'status', label: 'Status', render: (value) => <Badge tone={getStatusTone(value)}>{value}</Badge> },
+                        { key: 'ultimoAcesso', label: 'Último acesso' },
+                        {
+                          key: 'acao',
+                          label: 'Ação',
+                          render: (_, item) => 
+                            <button
+                              onClick={() => alternarStatusUsuario(item.id)}
+                              className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white"
+                            >
+                              Alternar status
+                            </button>
+                          ),
+                        },
+                      ]
+                      data={usuarios}
+                    />
+                  </Section>
+                </div>
+
+                <Section title="Novo usuário" description="Cadastro simples de perfil interno.">
+                  <form onSubmit={adicionarUsuario} className="space-y-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Nome</label>
+                      <input
+                        value={novoUsuario.nome}
+                        onChange={(e) => setNovoUsuario({ ...novoUsuario, nome: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="Nome completo"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">E-mail</label>
+                      <input
+                        value={novoUsuario.email}
+                        onChange={(e) => setNovoUsuario({ ...novoUsuario, email: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="nome@empresa.com"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Perfil</label>
+                      <select
+                        value={novoUsuario.perfil}
+                        onChange={(e) => setNovoUsuario({ ...novoUsuario, perfil: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                      >
+                        <option>Administrador</option>
+                        <option>Operador</option>
+                        <option>Auditor</option>
+                        <option>Visualizador</option>
+                      </select>
+                    </div>
+                    <button className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-medium text-white">Cadastrar usuário</button>
+                  </form>
+                </Section>
+              </div>
+           
+
+            {pagina === 'dispositivos' && (
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <div className="xl:col-span-2">
+                  <Section title="Dispositivos monitorados" description="Câmeras, sensores e demais pontos integrados ao sistema.">
+                    <Tabela
+                      columns={[
+                        { key: 'nome', label: 'Nome' },
+                        { key: 'tipo', label: 'Tipo' },
+                        { key: 'local', label: 'Local' },
+                        { key: 'ip', label: 'IP' },
+                        { key: 'status', label: 'Status', render: (value) => <Badge tone={getStatusTone(value)}>{value}</Badge> },
+                        {
+                          key: 'acao',
+                          label: 'Ação',
+                          render: (_, item) => 
+                            <button
+                              onClick={() => alternarStatusDispositivo(item.id)}
+                              className="rounded-xl bg-slate-900 px-3 py-2 text-xs font-medium text-white"
+                            >
+                              Alternar status
+                            </button>
+                          ),
+                        },
+                      ]
+                      data={dispositivos}
+                    />
+                  </Section>
+                </div>
+
+                <Section title="Novo dispositivo" description="Cadastro de ativo monitorado.">
+                  <form onSubmit={adicionarDispositivo} className="space-y-4">
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Nome</label>
+                      <input
+                        value={novoDispositivo.nome}
+                        onChange={(e) => setNovoDispositivo({ ...novoDispositivo, nome: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="Ex.: Câmera Recepção"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Tipo</label>
+                      <select
+                        value={novoDispositivo.tipo}
+                        onChange={(e) => setNovoDispositivo({ ...novoDispositivo, tipo: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                      >
+                        <option>Câmera</option>
+                        <option>Sensor</option>
+                        <option>Controlador de acesso</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">Local</label>
+                      <input
+                        value={novoDispositivo.local}
+                        onChange={(e) => setNovoDispositivo({ ...novoDispositivo, local: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="Ex.: Entrada lateral"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-slate-700">IP</label>
+                      <input
+                        value={novoDispositivo.ip}
+                        onChange={(e) => setNovoDispositivo({ ...novoDispositivo, ip: e.target.value })}
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3"
+                        placeholder="192.168.0.55"
+                      />
+                    </div>
+                    <button className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-medium text-white">Cadastrar dispositivo</button>
+                  </form>
+                </Section>
+              </div>
+        
+
+            {pagina === 'auditoria' && 
+              <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <div className="xl:col-span-2">
+                  <Section title="Trilha de auditoria" description="Registro consolidado das ações executadas no ambiente.">
+                    <Tabela
+                      columns={[
+                        { key: 'horario', label: 'Data e hora' },
+                        { key: 'tipo', label: 'Categoria' },
+                        { key: 'origem', label: 'Origem' },
+                        { key: 'local', label: 'Módulo/Local' },
+                        { key: 'descricao', label: 'Descrição' },
+                      ]}
+                      data={eventos}
+                    />
+                  </Section>
+                </div>
+
+                <Section title="Boas práticas" description="Diretrizes que fortalecem o uso profissional do sistema.">
+                  <div className="space-y-3 text-sm text-slate-600">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      Utilizar autenticação forte e registrar acessos críticos.
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      Aplicar níveis de permissão por função e necessidade real.
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      Manter logs auditáveis e política de retenção definida.
+                    </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      Integrar backend e banco de dados com criptografia e controle de sessão.
+                    </div>
+                  </div>
+                </Section>
+              </div>
+            
+          </div>
+        </main>
+      </div>
+    </div>
+  

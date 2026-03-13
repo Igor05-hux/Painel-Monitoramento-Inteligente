@@ -1,0 +1,17 @@
+GET    /usuarios
+POST   /usuarios
+PATCH  /usuarios/{id}/status
+DELETE /usuarios/{id}
+
+GET    /dispositivos
+POST   /dispositivos
+PATCH  /dispositivos/{id}/status
+DELETE /dispositivos/{id}
+
+GET    /eventos
+POST   /eventos
+
+GET    /alertas
+POST   /alertas
+PATCH  /alertas/{id}/concluir
+DELETE /alertas/{id}
